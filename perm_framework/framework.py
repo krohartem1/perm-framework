@@ -33,6 +33,35 @@ class MetricBase(ABC):
         return self.__class__.__name__
 
 
+class PrecomputedMetric(MetricBase):
+    """
+    Метрика, которая уже посчитана на user-level.
+
+    Ожидает DataFrame с колонками:
+      - unit_col (например cookie_id)
+      - group_col (например ab_group)
+      - metric_col (например ben или ben_weighted)
+
+    Возвращает [unit_col, group_col, metric_value].
+    """
+
+    def __init__(self, metric_col: str):
+        self.metric_col = metric_col
+
+    @property
+    def name(self):
+        return f"Precomputed({self.metric_col})"
+
+    def compute_user_values(self, df, group_col, unit_col) -> pd.DataFrame:
+        need = {unit_col, group_col, self.metric_col}
+        missing = sorted(need - set(df.columns))
+        if missing:
+            raise ValueError(f"PrecomputedMetric ожидает колонки {sorted(need)}; не хватает: {missing}")
+        uv = df[[unit_col, group_col, self.metric_col]].copy()
+        uv = uv.rename(columns={self.metric_col: "metric_value"})
+        return uv
+
+
 class GroupLevelMetric(ABC):
     """Group-level метрика (напр. unique items). Возвращает скаляр."""
 
