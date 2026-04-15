@@ -35,6 +35,51 @@ res_ben = run_permutation_test(df_user, PrecomputedMetric("ben"), config)
 res_benw = run_permutation_test(df_user, PrecomputedMetric("ben_weighted"), config)
 ```
 
+## Два режима работы (как у тебя)
+
+### Режим 1 (default): raw impressions df (`cookie_id|item_id|ab_group|position`)
+
+Ты можешь сначала взять небольшой сэмпл пользователей (например 5% в каждой группе),
+построить для них raw df и прогнать “честный” расчёт BEN из исходных `(user,item)`.
+
+```python
+from perm_framework import (
+    ExperimentConfig,
+    run_permutation_test,
+    BENMetric,
+    BENWeightedMetric,
+    sample_users_by_group,
+)
+
+df_small = sample_users_by_group(df_raw, frac=0.05, seed=42)
+config = ExperimentConfig(unit_col="cookie_id", group_col="ab_group", n_permutations=2000)
+
+res_ben  = run_permutation_test(df_small, BENMetric(), config)
+res_benw = run_permutation_test(df_small, BENWeightedMetric(), config)
+```
+
+### Режим 2: precomputed user-level df (`cookie_id|ab_group|ben|ben_weighted|k_u`)
+
+Ты считаешь метрики в SQL на user-level, а в Python делаешь только permutation test.
+
+```python
+from perm_framework import ExperimentConfig, run_permutation_test, PrecomputedMetric
+
+config = ExperimentConfig(unit_col="cookie_id", group_col="ab_group", n_permutations=5000)
+res_ben  = run_permutation_test(df_user, PrecomputedMetric("ben"), config)
+res_benw = run_permutation_test(df_user, PrecomputedMetric("ben_weighted"), config)
+```
+
+### Приближённая user-level “уникальные айтемы”
+
+Group-level `UniqueItems` (мощность объединения) на бутстрапе по сырым данным очень тяжёлая.
+Для быстрой прикидки можно использовать user-level метрику `K_u` = число уникальных айтемов у пользователя:
+
+```python
+from perm_framework import UserUniqueItemsMetric
+res_ku = run_permutation_test(df_raw, UserUniqueItemsMetric(), config)
+```
+
 ### Как подключить в ноутбуке (вариант 1: clone + editable install)
 
 ```bash

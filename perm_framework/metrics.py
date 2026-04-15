@@ -89,3 +89,32 @@ class UniqueItemsMetric(GroupLevelMetric):
     def compute_group_stat(self, group_df):
         return group_df[self.item_col].nunique()
 
+
+class UserUniqueItemsMetric(MetricBase):
+    """
+    User-level метрика: число уникальных айтемов у пользователя (K_u).
+    Это НЕ то же самое, что group-level UniqueItems (мощность объединения),
+    но полезно как приближённая оценка и легко считается/тестируется.
+    """
+
+    def __init__(self, item_col="item_id"):
+        self.item_col = item_col
+
+    @property
+    def name(self):
+        return "UserUniqueItems"
+
+    def compute_user_values(self, df, group_col, unit_col):
+        need = {unit_col, group_col, self.item_col}
+        missing = sorted(need - set(df.columns))
+        if missing:
+            raise ValueError(f"UserUniqueItemsMetric ожидает колонки {sorted(need)}; не хватает: {missing}")
+
+        uv = (
+            df.groupby([unit_col, group_col])[self.item_col]
+            .nunique()
+            .reset_index()
+            .rename(columns={self.item_col: "metric_value"})
+        )
+        return uv
+

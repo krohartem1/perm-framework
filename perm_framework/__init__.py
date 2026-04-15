@@ -10,7 +10,8 @@ from .framework import (
     run_permutation_test,
 )
 
-from .metrics import BENMetric, BENWeightedMetric, UniqueItemsMetric
+from .metrics import BENMetric, BENWeightedMetric, UniqueItemsMetric, UserUniqueItemsMetric
+from .utils import sample_users_by_group
 try:
     from .validation_checks import run_all_checks
 except Exception:  # optional dependency (scipy)
@@ -35,6 +36,8 @@ __all__ = [
     "BENMetric",
     "BENWeightedMetric",
     "UniqueItemsMetric",
+    "UserUniqueItemsMetric",
+    "sample_users_by_group",
     "run_all_checks",
     "compute_linearized_ben",
     "linearized_ttest",
