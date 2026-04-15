@@ -138,3 +138,48 @@ def run_all_checks(df, unit_col="cookie_id", group_col="ab_group", item_col="ite
         print("=" * 60)
     return checks
 
+
+def run_user_level_checks(
+    df,
+    *,
+    unit_col="cookie_id",
+    group_col="ab_group",
+    metric_cols=("ben",),
+    verbose=True,
+):
+    """
+    Проверки для user-level датафрейма, где метрики уже посчитаны (например в SQL).
+
+    Ожидаемые колонки:
+      - unit_col
+      - group_col
+      - metric_cols (например 'ben', 'ben_weighted', 'k_u')
+    """
+    missing = sorted({unit_col, group_col, *metric_cols} - set(df.columns))
+    if missing:
+        raise ValueError(f"User-level df должен содержать {missing}. Текущие колонки: {list(df.columns)}")
+
+    checks = [
+        check_no_cross_group(df, unit_col, group_col),
+        check_group_sizes(df, unit_col, group_col),
+    ]
+
+    n = len(df)
+    nd = df.drop_duplicates(subset=[unit_col]).shape[0]
+    d = n - nd
+    if d == 0:
+        checks.append(CheckResult("User duplicates", "PASS", "Нет дубликатов по пользователю"))
+    else:
+        checks.append(CheckResult("User duplicates", "WARNING", f"{d} дубликатов по {unit_col}"))
+
+    if verbose:
+        np_, nw, nf = (sum(1 for c in checks if c.status == s) for s in ["PASS", "WARNING", "FAIL"])
+        print("=" * 60)
+        for c in checks:
+            print(c)
+        print(f"\nИтого: {np_} PASS, {nw} WARNING, {nf} FAIL")
+        if nf:
+            print("⚠ ЕСТЬ FAIL!")
+        print("=" * 60)
+    return checks
+

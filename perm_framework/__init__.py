@@ -13,9 +13,10 @@ from .framework import (
 from .metrics import BENMetric, BENWeightedMetric, UniqueItemsMetric, UserUniqueItemsMetric
 from .utils import sample_users_by_group
 try:
-    from .validation_checks import run_all_checks
+    from .validation_checks import run_all_checks, run_user_level_checks
 except Exception:  # optional dependency (scipy)
     run_all_checks = None  # type: ignore
+    run_user_level_checks = None  # type: ignore
 
 try:
     from .linearization import compute_linearized_ben, linearized_ttest
@@ -39,6 +40,7 @@ __all__ = [
     "UserUniqueItemsMetric",
     "sample_users_by_group",
     "run_all_checks",
+    "run_user_level_checks",
     "compute_linearized_ben",
     "linearized_ttest",
 ]

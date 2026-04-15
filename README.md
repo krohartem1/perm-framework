@@ -58,6 +58,15 @@ res_ben  = run_permutation_test(df_small, BENMetric(), config)
 res_benw = run_permutation_test(df_small, BENWeightedMetric(), config)
 ```
 
+SQL (рекомендуемый способ сделать подвыборку 5% пользователей воспроизводимо):
+
+```sql
+CREATE TABLE avc_impr_sample5 AS
+SELECT *
+FROM avc_impressions_ab_30859
+WHERE (abs(xxhash64(CAST(cookie_id AS varchar))) % 100) < 5;
+```
+
 ### Режим 2: precomputed user-level df (`cookie_id|ab_group|ben|ben_weighted|k_u`)
 
 Ты считаешь метрики в SQL на user-level, а в Python делаешь только permutation test.
@@ -68,6 +77,13 @@ from perm_framework import ExperimentConfig, run_permutation_test, PrecomputedMe
 config = ExperimentConfig(unit_col="cookie_id", group_col="ab_group", n_permutations=5000)
 res_ben  = run_permutation_test(df_user, PrecomputedMetric("ben"), config)
 res_benw = run_permutation_test(df_user, PrecomputedMetric("ben_weighted"), config)
+```
+
+Валидация user-level df:
+
+```python
+from perm_framework import run_user_level_checks
+run_user_level_checks(df_user, metric_cols=("ben","ben_weighted","k_u"))
 ```
 
 ### Приближённая user-level “уникальные айтемы”
