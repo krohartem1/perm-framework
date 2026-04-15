@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "perm-framework"
+version = "0.1.0"
+description = "Permutation test + bootstrap framework for BEN metrics"
+requires-python = ">=3.9"
+dependencies = [
+  "numpy",
+  "pandas",
+  "scipy",
+  "matplotlib",
+]
+
+[tool.setuptools]
+packages = ["perm_framework"]
+
