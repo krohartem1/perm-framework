@@ -86,6 +86,93 @@ from perm_framework import run_user_level_checks
 run_user_level_checks(df_user, metric_cols=("ben","ben_weighted","k_u"))
 ```
 
+## Рекомендуемый порядок запуска в ноутбуке
+
+### 1. Обновить пакет
+
+```bash
+pip install --upgrade git+https://github.com/krohartem1/perm-framework.git
+```
+
+Потом restart kernel.
+
+### 2. Импорт
+
+```python
+import pandas as pd
+from perm_framework import (
+    ExperimentConfig,
+    run_permutation_test,
+    run_bootstrap_test,
+    BENMetric,
+    BENWeightedMetric,
+    UniqueItemsMetric,
+    PrecomputedMetric,
+    run_all_checks,
+    run_user_level_checks,
+)
+```
+
+### 3. RAW режим: быстрый smoke-test перед полным запуском
+
+```python
+print(df.dtypes)
+print(df["ab_group"].value_counts())
+
+uv = BENMetric().compute_user_values(df, "ab_group", "cookie_id")
+print(uv.groupby("ab_group")["metric_value"].agg(["mean", "std", "count"]))
+
+config_small = ExperimentConfig(
+    unit_col="cookie_id",
+    item_col="item_id",
+    group_col="ab_group",
+    control_label="control",
+    treatment_label="test",
+    n_permutations=50,
+)
+r = run_permutation_test(df, BENMetric(), config_small)
+```
+
+### 4. RAW режим: полный запуск
+
+```python
+config = ExperimentConfig(
+    unit_col="cookie_id",
+    item_col="item_id",
+    group_col="ab_group",
+    control_label="control",
+    treatment_label="test",
+    n_permutations=5000,
+    n_bootstrap=3000,
+    seed=42,
+)
+
+run_all_checks(df, unit_col="cookie_id", item_col="item_id", group_col="ab_group")
+
+r_ben = run_permutation_test(df, BENMetric(), config)
+r_benw = run_permutation_test(df, BENWeightedMetric(), config)
+r_uniq = run_bootstrap_test(df, UniqueItemsMetric(), config)
+```
+
+### 5. User-level режим
+
+```python
+run_user_level_checks(df_user, metric_cols=("ben", "ben_weighted", "k_u"))
+
+config_user = ExperimentConfig(
+    unit_col="cookie_id",
+    group_col="ab_group",
+    control_label="control",
+    treatment_label="test",
+    n_permutations=5000,
+    seed=42,
+)
+
+r_ben_u = run_permutation_test(df_user, PrecomputedMetric("ben"), config_user)
+r_benw_u = run_permutation_test(df_user, PrecomputedMetric("ben_weighted"), config_user)
+r_ku_u = run_permutation_test(df_user, PrecomputedMetric("k_u"), config_user)
+```
+
 ### Приближённая user-level “уникальные айтемы”
 
 Group-level `UniqueItems` (мощность объединения) на бутстрапе по сырым данным очень тяжёлая.
