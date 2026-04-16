@@ -7,6 +7,7 @@ from .framework import (
     plot_permutation_results,
     plot_user_distributions,
     run_bootstrap_test,
+    run_bootstrap_unique_items,
     run_permutation_test,
 )
 
@@ -31,6 +32,7 @@ __all__ = [
     "PrecomputedMetric",
     "run_permutation_test",
     "run_bootstrap_test",
+    "run_bootstrap_unique_items",
     "plot_permutation_results",
     "plot_bootstrap_results",
     "plot_user_distributions",

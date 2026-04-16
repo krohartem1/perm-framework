@@ -104,6 +104,7 @@ from perm_framework import (
     ExperimentConfig,
     run_permutation_test,
     run_bootstrap_test,
+    run_bootstrap_unique_items,
     BENMetric,
     BENWeightedMetric,
     UniqueItemsMetric,
@@ -151,7 +152,8 @@ run_all_checks(df, unit_col="cookie_id", item_col="item_id", group_col="ab_group
 
 r_ben = run_permutation_test(df, BENMetric(), config)
 r_benw = run_permutation_test(df, BENWeightedMetric(), config)
-r_uniq = run_bootstrap_test(df, UniqueItemsMetric(), config)
+# UniqueItems: для больших raw-таблиц обычно сильно быстрее, чем generic `run_bootstrap_test(...)`
+r_uniq = run_bootstrap_unique_items(df, config, item_col="item_id")
 ```
 
 ### 5. User-level режим
@@ -176,6 +178,8 @@ r_ku_u = run_permutation_test(df_user, PrecomputedMetric("k_u"), config_user)
 ### Приближённая user-level “уникальные айтемы”
 
 Group-level `UniqueItems` (мощность объединения) на бутстрапе по сырым данным очень тяжёлая.
+В пакете есть ускоренный путь `run_bootstrap_unique_items(...)` (см. выше).
+
 Для быстрой прикидки можно использовать user-level метрику `K_u` = число уникальных айтемов у пользователя:
 
 ```python
@@ -198,6 +202,7 @@ from perm_framework import (
     ExperimentConfig,
     run_permutation_test,
     run_bootstrap_test,
+    run_bootstrap_unique_items,
     BENMetric,
     BENWeightedMetric,
     UniqueItemsMetric,

@@ -175,6 +175,12 @@ def run_permutation_test(df, metric: MetricBase, config: ExperimentConfig, verbo
 
 
 def run_bootstrap_test(df, metric: GroupLevelMetric, config: ExperimentConfig, verbose=True) -> dict:
+    """
+    Bootstrap CI для group-level метрик (generic).
+
+    Для `UniqueItems` на больших raw-таблицах (десятки миллионов строк) обычно быстрее
+    использовать `run_bootstrap_unique_items()` — он избегает `isin`-фильтрации на каждой итерации.
+    """
     c = config
     rng = np.random.default_rng(c.seed)
 
@@ -220,6 +226,120 @@ def run_bootstrap_test(df, metric: GroupLevelMetric, config: ExperimentConfig, v
 
     return {
         "metric_name": metric.name,
+        "delta_obs": delta_obs,
+        "deltas_boot": deltas_boot,
+        "ci_lower": ci_lo,
+        "ci_upper": ci_hi,
+        "p_value_approx": p_approx,
+        "significant": sig,
+        "stat_control": stat_c,
+        "stat_treatment": stat_t,
+        "n_bootstrap": c.n_bootstrap,
+        "alpha": c.alpha,
+        "elapsed_seconds": elapsed,
+    }
+
+
+def run_bootstrap_unique_items(df, config: ExperimentConfig, item_col="item_id", verbose=True) -> dict:
+    """
+    Ускоренный bootstrap для числа уникальных товаров (UniqueItems).
+
+    Вместо `isin`-фильтрации на каждой итерации (O(N_rows)):
+    1) Один раз строим dict user → массив item_codes (int32).
+    2) На каждой итерации: семплируем юзеров, concat их item_codes,
+       ставим bitmap[item_code] = True, считаем sum.
+
+    Важно: `df` должен быть дедуплирован по (unit_col, item_col) за период (как в гайде).
+    """
+    c = config
+    rng = np.random.default_rng(c.seed)
+
+    if verbose:
+        print("UniqueItems bootstrap (ускоренный)")
+        print("  Подготовка...")
+
+    t0 = time.time()
+
+    # Кодируем item_id в int32 0..n_items-1
+    item_codes_arr, item_uniques = pd.factorize(df[item_col], sort=False)
+    item_codes_arr = item_codes_arr.astype(np.int32)
+    n_items_enc = len(item_uniques)
+
+    # Строим dict user → массив item_codes для каждой группы
+    user_items_by_grp = {}
+    users_by_grp = {}
+    for grp in [c.control_label, c.treatment_label]:
+        mask = df[c.group_col].values == grp
+        gdf_users = df[c.unit_col].values[mask]
+        gdf_codes = item_codes_arr[mask]
+
+        order = np.argsort(gdf_users, kind="stable")
+        users_sorted = gdf_users[order]
+        items_sorted = gdf_codes[order]
+
+        boundaries = np.concatenate([[0], np.where(np.diff(users_sorted) != 0)[0] + 1, [len(users_sorted)]])
+        unique_users = users_sorted[boundaries[:-1]]
+
+        user_items = {}
+        for j in range(len(unique_users)):
+            user_items[unique_users[j]] = items_sorted[boundaries[j] : boundaries[j + 1]]
+
+        user_items_by_grp[grp] = user_items
+        users_by_grp[grp] = unique_users
+
+    t_prep = time.time() - t0
+
+    # Наблюдаемые значения
+    stat_c = int(np.unique(item_codes_arr[df[c.group_col].values == c.control_label]).size)
+    stat_t = int(np.unique(item_codes_arr[df[c.group_col].values == c.treatment_label]).size)
+    delta_obs = stat_t - stat_c
+
+    if verbose:
+        print(f"  Подготовка: {t_prep:.1f}s, bitmap: {n_items_enc * 1 / 1024 / 1024:.1f} MB")
+        print(f"  {c.control_label}: {stat_c:,},  {c.treatment_label}: {stat_t:,},  Δ = {delta_obs:,}")
+        print(f"  Bootstrap ({c.n_bootstrap})...")
+
+    deltas_boot = np.empty(c.n_bootstrap)
+    t0 = time.time()
+
+    for b in range(c.n_bootstrap):
+        if verbose and (b + 1) % 500 == 0:
+            el = time.time() - t0
+            eta = el / (b + 1) * (c.n_bootstrap - b - 1)
+            print(f"  {b+1}/{c.n_bootstrap}  (ETA: {eta:.0f}s)")
+
+        stats_b = {}
+        for grp in [c.control_label, c.treatment_label]:
+            users = users_by_grp[grp]
+            user_items = user_items_by_grp[grp]
+
+            sampled = np.unique(rng.choice(users, size=len(users), replace=True))
+
+            all_items = np.concatenate([user_items[u] for u in sampled])
+
+            bitmap = np.zeros(n_items_enc, dtype=bool)
+            bitmap[all_items] = True
+
+            stats_b[grp] = int(bitmap.sum())
+
+        deltas_boot[b] = stats_b[c.treatment_label] - stats_b[c.control_label]
+
+    ci_lo = np.percentile(deltas_boot, 100 * c.alpha / 2)
+    ci_hi = np.percentile(deltas_boot, 100 * (1 - c.alpha / 2))
+    sig = (ci_lo > 0) or (ci_hi < 0)
+    if delta_obs > 0:
+        p_approx = 2 * (np.sum(deltas_boot <= 0) + 1) / (c.n_bootstrap + 1)
+    else:
+        p_approx = 2 * (np.sum(deltas_boot >= 0) + 1) / (c.n_bootstrap + 1)
+    p_approx = min(p_approx, 1.0)
+    elapsed = time.time() - t0
+
+    if verbose:
+        print(f"  95% CI = [{ci_lo:.0f}, {ci_hi:.0f}],  p ≈ {p_approx:.6f}")
+        print(f"  Решение: {'ОТВЕРГАЕМ H₀' if sig else 'НЕ ОТВЕРГАЕМ H₀'} ({elapsed:.0f}s)")
+
+    return {
+        "metric_name": "UniqueItems",
         "delta_obs": delta_obs,
         "deltas_boot": deltas_boot,
         "ci_lower": ci_lo,
